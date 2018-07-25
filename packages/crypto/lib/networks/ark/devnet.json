@@ -52,5 +52,6 @@
     "reward": 200000000
   }],
   "exceptions": {
+    "249c4d1701221fa2a2b3b1580c385c494e37565baa03059af23b88c6c6c08788": true
   }
 }
