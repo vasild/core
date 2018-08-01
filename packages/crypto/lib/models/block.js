@@ -299,13 +299,13 @@ module.exports = class Block {
         result.errors.push('Invalid block timestamp')
       }
 
-      // Disabling to allow orphanedBlocks?
-      // if(previousBlock){
-      //   const lastBlockSlotNumber = slots.getSlotNumber(previousBlock.timestamp)
-      //   if(blockSlotNumber < lastBlockSlotNumber) {
-      //      result.errors.push('block timestamp is smaller than previous block timestamp')
-      //   }
-      // }
+      if (block.previousBlock) {
+        const blockSlotNumber = slots.getSlotNumber(block.timestamp)
+        const lastBlockSlotNumber = slots.getSlotNumber(block.previousBlock.timestamp)
+        if (blockSlotNumber < lastBlockSlotNumber) {
+          result.errors.push('Block timestamp is smaller than previous block timestamp')
+        }
+      }
 
       if (block.payloadLength > constants.maxPayloadLength) {
         result.errors.push('Payload length is too high')
