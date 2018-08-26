@@ -16,12 +16,16 @@ module.exports = {
       id: {
         allowNull: false,
         autoIncrement: false,
-        primaryKey: true,
         type: Sequelize.STRING(64)
       },
       sequence: {
         allowNull: false,
         autoIncrement: true,
+        // Naturally `id` should be the primary key, but we need `sequence`
+        // to be AUTOINCREMENT and the `autoIncrement: true` seems to be
+        // ignored if the column is not the primary key. Thus we make the
+        // `sequence` column the primary key.
+        primaryKey: true,
         type: Sequelize.BIGINT
       },
       sender_public_key: {
@@ -38,7 +42,7 @@ module.exports = {
       }
     })
 
-    await queryInterface.addIndex('transaction_pool', { fields: ['sequence'], unique: true })
+    await queryInterface.addIndex('transaction_pool', { fields: ['id'], unique: true })
 
     await queryInterface.addIndex('transaction_pool', { fields: ['sender_public_key'], unique: false })
 

@@ -742,24 +742,8 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
       expireAt = null
     }
 
-    /* XXX autoIncrement in
-     * packages/core-database-sequelize/lib/migrations/20180805153242-create-transaction-pool.js
-     * seems to have no effect - the table is created without AUTOINCREMENT
-     * clause and later NULL is INSERTed. So we mimic it here, assuming
-     * no concurrent access.
-     * https://stackoverflow.com/questions/33948131/sequelize-autoincrement-and-sqlite
-     */
-    let sequence
-    let maxRow = await this.query.select().max('sequence').from('transaction_pool').first()
-    if (maxRow.sequence === null) {
-      sequence = 0
-    } else {
-      sequence = maxRow.sequence + 1
-    }
-
     await this.connection.getQueryInterface().bulkInsert('transaction_pool', [{
       id: transaction.id,
-      sequence: sequence,
       sender_public_key: transaction.senderPublicKey,
       serialized: transaction.serialized.toString('hex'),
       expire_at: expireAt
