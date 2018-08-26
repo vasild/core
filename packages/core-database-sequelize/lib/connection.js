@@ -666,40 +666,6 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
   /** Transaction pool aux methods @{ */
 
   /**
-   * Get all expired (whose expiration date is before `olderThan`)
-   * transactions from the transaction pool.
-   * @param {Date} olderThan
-   * @return an array of serialized transactions (strings)
-   */
-  async getExpiredFromTransactionPool (olderThan) {
-    const rows = await this.query
-      .select('serialized')
-      .from('transaction_pool')
-      .whereBetween('expire_at', 0, olderThan)
-      .all()
-      // XXX why do these:
-      // .where({ expire_at: { [Op.lt]: olderThan } })
-      // .where('expire_at', { [Op.lt]: olderThan })
-      // emit:
-      // Error: Invalid value { [Symbol(lt)]: 2018-08-06T15:35:30.611Z }
-      // ?
-
-    return rows.map(row => row.serialized)
-  }
-
-  /**
-   * Remove all expired (whose expiration date is before `olderThan`)
-   * transactions from the transaction pool.
-   * @return {void}
-   */
-  async purgeExpiredFromTransactionPool (olderThan) {
-    await this.connection.getQueryInterface().bulkDelete(
-      'transaction_pool',
-      { expire_at: { [Op.lt]: olderThan } }
-    )
-  }
-
-  /**
    * Get number of transactions in the transaction pool.
    * @return {Number}
    */
@@ -713,110 +679,41 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
   }
 
   /**
-   * Get number of transactions in the transaction pool from a given sender.
-   * @param  {String} senderPublicKey
-   * @return {Number}
-   */
-  async getTransactionPoolSenderSize (senderPublicKey) {
-    const { count } = await this.query
-      .select()
-      .count('id', 'count')
-      .from('transaction_pool')
-      .where('sender_public_key', senderPublicKey)
-      .first()
-    return count
-  }
-
-  /**
-   * Add a transaction to the transaction pool.
-   * @param {Transaction} transaction
+   * Add transactions to the transaction pool.
+   * @param {Array of Transaction objects} transactions
    * @return {void}
    */
-  async addTransactionToPool (transaction) {
+  async addTransactionsToPool (transactions) {
     const now = new Date()
+    let bulk = []
 
-    let expireAt
-    if (transaction.expiration > 0) {
-      expireAt = new Date(now.getTime() + (transaction.expiration - transaction.timestamp) * 1000)
-    } else {
-      expireAt = null
+    for (const t of transactions) {
+      let expireAt
+      if (t.expiration > 0) {
+        expireAt = new Date(now.getTime() + (t.expiration - t.timestamp) * 1000)
+      } else {
+        expireAt = null
+      }
+
+      bulk.push({
+        id: t.id,
+        sender_public_key: t.senderPublicKey,
+        serialized: t.serialized.toString('hex'),
+        expire_at: expireAt
+      })
     }
 
-    await this.connection.getQueryInterface().bulkInsert('transaction_pool', [{
-      id: transaction.id,
-      sender_public_key: transaction.senderPublicKey,
-      serialized: transaction.serialized.toString('hex'),
-      expire_at: expireAt
-    }])
+    await this.connection.getQueryInterface().bulkInsert('transaction_pool', bulk)
   }
 
   /**
-   * Remove a transaction from the transaction pool.
-   * @param  {String} transactionId
+   * Remove transactions from the transaction pool given their ids.
+   * @param  {Array} transactionIds
    * @return {void}
    */
-  async removeTransactionFromPoolById (transactionId) {
+  async removeTransactionsFromPoolById (transactionIds) {
     await this.connection.getQueryInterface().bulkDelete('transaction_pool',
-      { id: transactionId })
-  }
-
-  /**
-   * Remove all transactions from the transaction pool from a given sender.
-   * @param  {String} transactionId
-   * @return {void}
-   */
-  async removeTransactionsFromPoolForSender (senderPublicKey) {
-    await this.connection.getQueryInterface().bulkDelete('transaction_pool',
-      { sender_public_key: senderPublicKey })
-  }
-
-  /**
-   * Check if a transaction (given its id) exists in the transaction pool.
-   * @param  {String} transactionId
-   * @return {Boolean}
-   */
-  async transactionExistsInPool (transactionId) {
-    const { count } = await this.query
-      .select()
-      .count('id', 'count')
-      .from('transaction_pool')
-      .where('id', transactionId)
-      .first()
-    return count > 0
-  }
-
-  /**
-   * Get the number of transactions in the transaction pool from a given sender.
-   * @param  {String} senderPublicKey
-   * @return {Number}
-   */
-  async senderTransactionsCountInPool (senderPublicKey) {
-    const { count } = await this.query
-      .select()
-      .count('id', 'count')
-      .from('transaction_pool')
-      .where('sender_public_key', senderPublicKey)
-      .first()
-    return count
-  }
-
-  /**
-   * Get a transaction (serialized string) from the transaction pool given its id.
-   * @param  {String} transactionId
-   * @return {String|undefined}
-   */
-  async getTransactionFromPool (transactionId) {
-    const transaction = await this.query
-      .select('serialized')
-      .from('transaction_pool')
-      .where('id', transactionId)
-      .first()
-
-    if (transaction) {
-      return transaction.serialized
-    }
-
-    return undefined
+      { id: { [Op.in]: transactionIds } })
   }
 
   /**
@@ -826,13 +723,14 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
    * @return {Array} [{ id: ..., serialized: ...}, ... ]
    */
   async transactionsInRangeFromPool (start, size) {
-    return this.query
+    const result = await this.query
       .select('id, serialized')
       .from('transaction_pool')
       .orderBy('sequence', 'ASC')
       .offset(start)
       .limit(size)
       .all()
+    return result
   }
 
   /**

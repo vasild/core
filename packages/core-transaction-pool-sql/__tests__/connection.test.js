@@ -13,7 +13,7 @@ beforeAll(async () => {
 
   const Connection = require('../lib/connection.js')
   connection = new Connection(defaultConfig)
-  connection = connection.make()
+  connection = await connection.make()
 })
 
 afterAll(async () => {
@@ -44,6 +44,10 @@ describe('Connection', () => {
       await connection.addTransaction(mockData.dummy1)
 
       await expect(connection.getPoolSize()).resolves.toBe(1)
+
+      await connection.addTransaction(mockData.dummy2)
+
+      await expect(connection.getPoolSize()).resolves.toBe(2)
     })
   })
 
@@ -57,12 +61,17 @@ describe('Connection', () => {
     })
 
     it('should return 2 if transactions were added', async () => {
-      await expect(connection.getSenderSize(mockData.dummy1.senderPublicKey)).resolves.toBe(0)
+      const senderPublicKey = mockData.dummy1.senderPublicKey
+
+      await expect(connection.getSenderSize(senderPublicKey)).resolves.toBe(0)
 
       await connection.addTransaction(mockData.dummy1)
+
+      await expect(connection.getSenderSize(senderPublicKey)).resolves.toBe(1)
+
       await connection.addTransaction(mockData.dummy2)
 
-      await expect(connection.getSenderSize(mockData.dummy1.senderPublicKey)).resolves.toBe(2)
+      await expect(connection.getSenderSize(senderPublicKey)).resolves.toBe(2)
     })
   })
 
@@ -88,12 +97,6 @@ describe('Connection', () => {
     it('should add the transactions to the pool', async () => {
       await expect(connection.getPoolSize()).resolves.toBe(0)
 
-      connection.addTransactions = jest.fn(async (transactions) => {
-        for (let i = 0; i < transactions.length; i++) {
-          await connection.addTransaction(transactions[i])
-        }
-      })
-
       await connection.addTransactions([mockData.dummy1, mockData.dummy2])
 
       await expect(connection.getPoolSize()).resolves.toBe(2)
@@ -104,16 +107,7 @@ describe('Connection', () => {
     it('should add the transactions to the pool and they should expire', async () => {
       await expect(connection.getPoolSize()).resolves.toBe(0)
 
-      connection.addTransactions = jest.fn(async (transactions) => {
-        for (let i = 0; i < transactions.length; i++) {
-          await connection.addTransaction(transactions[i])
-        }
-      })
-
-      const trx1 = new Transaction(mockData.dummyExp1)
-      const trx2 = new Transaction(mockData.dummyExp2)
-
-      await connection.addTransactions([trx1, trx2])
+      await connection.addTransactions([mockData.dummyExp1, mockData.dummyExp2])
 
       await expect(connection.getPoolSize()).resolves.toBe(2)
       await delay(7000)
@@ -198,27 +192,20 @@ describe('Connection', () => {
     })
 
     it('should return true if transaction is IN pool', async () => {
-      const trx1 = new Transaction(mockData.dummy1)
-      const trx2 = new Transaction(mockData.dummy1)
-      await connection.addTransactions([trx1, trx2])
+      await connection.addTransactions([mockData.dummy1, mockData.dummy2])
 
-      await delay(500)
-
-      const res1 = await connection.transactionExists(trx1.id)
+      const res1 = await connection.transactionExists(mockData.dummy1.id)
       expect(res1).toBe(true)
 
-      const res2 = await connection.transactionExists(trx2.id)
+      const res2 = await connection.transactionExists(mockData.dummy2.id)
       expect(res2).toBe(true)
     })
 
    it('should return false if transaction is NOT pool', async () => {
-      const trx1 = new Transaction(mockData.dummy1)
-      const trx2 = new Transaction(mockData.dummy1)
-
-      const res1 = await connection.transactionExists(trx1.id)
+      const res1 = await connection.transactionExists(mockData.dummy1.id)
       expect(res1).toBe(false)
 
-      const res2 = await connection.transactionExists(trx2.id)
+      const res2 = await connection.transactionExists(mockData.dummy2.id)
       expect(res2).toBe(false)
     })
   })
