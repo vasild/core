@@ -27,6 +27,8 @@ module.exports = class TransactionPoolInterface {
     this.memory = memory
 
     this.blockedByPublicKey = {}
+
+    this.database = database
   }
 
   /**
@@ -241,7 +243,7 @@ module.exports = class TransactionPoolInterface {
 
       return transactions
     } catch (error) {
-      logger.error('Could not get transactions for forging from Redis: ', error, error.stack)
+      logger.error('Could not get transactions for forging: ', error, error.stack)
     }
   }
 

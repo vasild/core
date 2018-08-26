@@ -663,6 +663,204 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
     return { [Sequelize.Op[type]]: params }
   }
 
+  /** Transaction pool aux methods @{ */
+
+  /**
+   * Get all expired (whose expiration date is before `olderThan`)
+   * transactions from the transaction pool.
+   * @param {Date} olderThan
+   * @return an array of serialized transactions (strings)
+   */
+  async getExpiredFromTransactionPool (olderThan) {
+    const rows = await this.query
+      .select('serialized')
+      .from('transactionPool')
+      .whereBetween('expireAt', 0, olderThan)
+      .all()
+      // XXX why do these:
+      // .where({ expireAt: { [Op.lt]: olderThan } })
+      // .where('expireAt', { [Op.lt]: olderThan })
+      // emit:
+      // Error: Invalid value { [Symbol(lt)]: 2018-08-06T15:35:30.611Z }
+      // ?
+
+    return rows.map(row => row.serialized)
+  }
+
+  /**
+   * Remove all expired (whose expiration date is before `olderThan`)
+   * transactions from the transaction pool.
+   * @return {void}
+   */
+  async purgeExpiredFromTransactionPool (olderThan) {
+    await this.connection.getQueryInterface().bulkDelete(
+      'transactionPool',
+      { expireAt: { [Op.lt]: olderThan } }
+    )
+  }
+
+  /**
+   * Get number of transactions in the transaction pool.
+   * @return {Number}
+   */
+  async getTransactionPoolSize () {
+    const { count } = await this.query
+      .select()
+      .count('id', 'count')
+      .from('transactionPool')
+      .first()
+    return count
+  }
+
+  /**
+   * Get number of transactions in the transaction pool from a given sender.
+   * @param  {String} senderPublicKey
+   * @return {Number}
+   */
+  async getTransactionPoolSenderSize (senderPublicKey) {
+    const { count } = await this.query
+      .select()
+      .count('id', 'count')
+      .from('transactionPool')
+      .where('senderPublicKey', senderPublicKey)
+      .first()
+    return count
+  }
+
+  /**
+   * Add a transaction to the transaction pool.
+   * @param {Transaction} transaction
+   * @return {void}
+   */
+  async addTransactionToPool (transaction) {
+    const now = new Date()
+
+    let expireAt
+    if (transaction.expiration > 0) {
+      expireAt = new Date(now.getTime() + (transaction.expiration - transaction.timestamp) * 1000)
+    } else {
+      expireAt = null
+    }
+
+    /* XXX autoIncrement in
+     * packages/core-database-sequelize/lib/migrations/20180805153242-create-transaction-pool.js
+     * seems to have no effect - the table is created without AUTOINCREMENT
+     * clause and later NULL is INSERTed. So we mimic it here, assuming
+     * no concurrent access.
+     * https://stackoverflow.com/questions/33948131/sequelize-autoincrement-and-sqlite
+     */
+    let sequence
+    let maxRow = await this.query.select().max('sequence').from('transactionPool').first()
+    if (maxRow.sequence === null) {
+      sequence = 0
+    } else {
+      sequence = maxRow.sequence + 1
+    }
+
+    await this.connection.getQueryInterface().bulkInsert('transactionPool', [{
+      id: transaction.id,
+      sequence: sequence,
+      senderPublicKey: transaction.senderPublicKey,
+      serialized: transaction.serialized.toString('hex'),
+      expireAt: expireAt
+    }])
+  }
+
+  /**
+   * Remove a transaction from the transaction pool.
+   * @param  {String} transactionId
+   * @return {void}
+   */
+  async removeTransactionFromPoolById (transactionId) {
+    await this.connection.getQueryInterface().bulkDelete('transactionPool',
+      { id: transactionId })
+  }
+
+  /**
+   * Remove all transactions from the transaction pool from a given sender.
+   * @param  {String} transactionId
+   * @return {void}
+   */
+  async removeTransactionsFromPoolForSender (senderPublicKey) {
+    await this.connection.getQueryInterface().bulkDelete('transactionPool',
+      { senderPublicKey: senderPublicKey })
+  }
+
+  /**
+   * Check if a transaction (given its id) exists in the transaction pool.
+   * @param  {String} transactionId
+   * @return {Boolean}
+   */
+  async transactionExistsInPool (transactionId) {
+    const { count } = await this.query
+      .select()
+      .count('id', 'count')
+      .from('transactionPool')
+      .where('id', transactionId)
+      .first()
+    return count > 0
+  }
+
+  /**
+   * Get the number of transactions in the transaction pool from a given sender.
+   * @param  {String} senderPublicKey
+   * @return {Number}
+   */
+  async senderTransactionsCountInPool (senderPublicKey) {
+    const { count } = await this.query
+      .select()
+      .count('id', 'count')
+      .from('transactionPool')
+      .where('senderPublicKey', senderPublicKey)
+      .first()
+    return count
+  }
+
+  /**
+   * Get a transaction (serialized string) from the transaction pool given its id.
+   * @param  {String} transactionId
+   * @return {String|undefined}
+   */
+  async getTransactionFromPool (transactionId) {
+    const transaction = await this.query
+      .select('serialized')
+      .from('transactionPool')
+      .where('id', transactionId)
+      .first()
+
+    if (transaction) {
+      return transaction.serialized
+    }
+
+    return undefined
+  }
+
+  /**
+   * Get all transactions in a given range [start, start + size).
+   * @param  {Number} start
+   * @param  {Number} size
+   * @return {Array} [{ id: ..., serialized: ...}, ... ]
+   */
+  async transactionsInRangeFromPool (start, size) {
+    return this.query
+      .select('id, serialized')
+      .from('transactionPool')
+      .orderBy('sequence', 'ASC')
+      .offset(start)
+      .limit(size)
+      .all()
+  }
+
+  /**
+   * Remove all transactions from the transaction pool.
+   * @return {void}
+   */
+  async flushTransactionPool () {
+    await this.connection.getQueryInterface().bulkDelete('transactionPool', { })
+  }
+
+  /** @} */
+
   /**
    * Register the query builder.
    * @return {void}
