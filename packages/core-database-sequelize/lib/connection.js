@@ -674,12 +674,12 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
   async getExpiredFromTransactionPool (olderThan) {
     const rows = await this.query
       .select('serialized')
-      .from('transactionPool')
-      .whereBetween('expireAt', 0, olderThan)
+      .from('transaction_pool')
+      .whereBetween('expire_at', 0, olderThan)
       .all()
       // XXX why do these:
-      // .where({ expireAt: { [Op.lt]: olderThan } })
-      // .where('expireAt', { [Op.lt]: olderThan })
+      // .where({ expire_at: { [Op.lt]: olderThan } })
+      // .where('expire_at', { [Op.lt]: olderThan })
       // emit:
       // Error: Invalid value { [Symbol(lt)]: 2018-08-06T15:35:30.611Z }
       // ?
@@ -694,8 +694,8 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
    */
   async purgeExpiredFromTransactionPool (olderThan) {
     await this.connection.getQueryInterface().bulkDelete(
-      'transactionPool',
-      { expireAt: { [Op.lt]: olderThan } }
+      'transaction_pool',
+      { expire_at: { [Op.lt]: olderThan } }
     )
   }
 
@@ -707,7 +707,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
     const { count } = await this.query
       .select()
       .count('id', 'count')
-      .from('transactionPool')
+      .from('transaction_pool')
       .first()
     return count
   }
@@ -721,8 +721,8 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
     const { count } = await this.query
       .select()
       .count('id', 'count')
-      .from('transactionPool')
-      .where('senderPublicKey', senderPublicKey)
+      .from('transaction_pool')
+      .where('sender_public_key', senderPublicKey)
       .first()
     return count
   }
@@ -750,19 +750,19 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
      * https://stackoverflow.com/questions/33948131/sequelize-autoincrement-and-sqlite
      */
     let sequence
-    let maxRow = await this.query.select().max('sequence').from('transactionPool').first()
+    let maxRow = await this.query.select().max('sequence').from('transaction_pool').first()
     if (maxRow.sequence === null) {
       sequence = 0
     } else {
       sequence = maxRow.sequence + 1
     }
 
-    await this.connection.getQueryInterface().bulkInsert('transactionPool', [{
+    await this.connection.getQueryInterface().bulkInsert('transaction_pool', [{
       id: transaction.id,
       sequence: sequence,
-      senderPublicKey: transaction.senderPublicKey,
+      sender_public_key: transaction.senderPublicKey,
       serialized: transaction.serialized.toString('hex'),
-      expireAt: expireAt
+      expire_at: expireAt
     }])
   }
 
@@ -772,7 +772,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
    * @return {void}
    */
   async removeTransactionFromPoolById (transactionId) {
-    await this.connection.getQueryInterface().bulkDelete('transactionPool',
+    await this.connection.getQueryInterface().bulkDelete('transaction_pool',
       { id: transactionId })
   }
 
@@ -782,8 +782,8 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
    * @return {void}
    */
   async removeTransactionsFromPoolForSender (senderPublicKey) {
-    await this.connection.getQueryInterface().bulkDelete('transactionPool',
-      { senderPublicKey: senderPublicKey })
+    await this.connection.getQueryInterface().bulkDelete('transaction_pool',
+      { sender_public_key: senderPublicKey })
   }
 
   /**
@@ -795,7 +795,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
     const { count } = await this.query
       .select()
       .count('id', 'count')
-      .from('transactionPool')
+      .from('transaction_pool')
       .where('id', transactionId)
       .first()
     return count > 0
@@ -810,8 +810,8 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
     const { count } = await this.query
       .select()
       .count('id', 'count')
-      .from('transactionPool')
-      .where('senderPublicKey', senderPublicKey)
+      .from('transaction_pool')
+      .where('sender_public_key', senderPublicKey)
       .first()
     return count
   }
@@ -824,7 +824,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
   async getTransactionFromPool (transactionId) {
     const transaction = await this.query
       .select('serialized')
-      .from('transactionPool')
+      .from('transaction_pool')
       .where('id', transactionId)
       .first()
 
@@ -844,7 +844,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
   async transactionsInRangeFromPool (start, size) {
     return this.query
       .select('id, serialized')
-      .from('transactionPool')
+      .from('transaction_pool')
       .orderBy('sequence', 'ASC')
       .offset(start)
       .limit(size)
@@ -856,7 +856,7 @@ module.exports = class SequelizeConnection extends ConnectionInterface {
    * @return {void}
    */
   async flushTransactionPool () {
-    await this.connection.getQueryInterface().bulkDelete('transactionPool', { })
+    await this.connection.getQueryInterface().bulkDelete('transaction_pool', { })
   }
 
   /** @} */

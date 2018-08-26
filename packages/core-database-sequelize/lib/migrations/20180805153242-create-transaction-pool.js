@@ -12,7 +12,7 @@ module.exports = {
    * @return {void}
    */
   async up (queryInterface, Sequelize) {
-    await queryInterface.createTable('transactionPool', {
+    await queryInterface.createTable('transaction_pool', {
       id: {
         allowNull: false,
         autoIncrement: false,
@@ -24,7 +24,7 @@ module.exports = {
         autoIncrement: true,
         type: Sequelize.BIGINT
       },
-      senderPublicKey: {
+      sender_public_key: {
         allowNull: false,
         type: Sequelize.STRING(66)
       },
@@ -32,17 +32,17 @@ module.exports = {
         allowNull: false,
         type: Sequelize.BLOB()
       },
-      expireAt: {
+      expire_at: {
         allowNull: true,
         type: Sequelize.DATE
       }
     })
 
-    await queryInterface.addIndex('transactionPool', { fields: ['sequence'], unique: true })
+    await queryInterface.addIndex('transaction_pool', { fields: ['sequence'], unique: true })
 
-    await queryInterface.addIndex('transactionPool', { fields: ['senderPublicKey'], unique: false })
+    await queryInterface.addIndex('transaction_pool', { fields: ['sender_public_key'], unique: false })
 
-    await queryInterface.addIndex('transactionPool', { fields: ['expireAt'], unique: false })
+    await queryInterface.addIndex('transaction_pool', { fields: ['expire_at'], unique: false })
   },
   /**
    * Reverse the migrations.
@@ -51,6 +51,6 @@ module.exports = {
    * @return {void}
    */
   async down (queryInterface, Sequelize) {
-    return queryInterface.dropTable('transactionPool')
+    return queryInterface.dropTable('transaction_pool')
   }
 }
